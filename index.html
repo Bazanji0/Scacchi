@@ -3,157 +3,463 @@
   <head>
     <meta charset="UTF-8" />
     <title>Scacchiera</title>
-    <link rel="stylesheet" href="style.css" />
+    <style>
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+      }
+
+      .scacchiera {
+        width: 80vw;
+        height: 80vw;
+        display: flex;
+        flex-wrap: wrap;
+      }
+
+      .casella {
+        width: 12.5%;
+        height: 12.5%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+      }
+
+      .bianca {
+        background-color: #eee; /* chiaro */
+      }
+
+      .nera {
+        background-color: #666; /* scuro */
+      }
+
+      .coordinate {
+        position: absolute;
+        bottom: 4%;
+        left: 4%;
+        font-size: 12px;
+        font-weight: bold;
+        font-family: Verdana, Geneva, Tahoma, sans-serif;
+      }
+
+      /* Coordinata sopra per numeri di riga */
+      .riga {
+        bottom: auto;
+        top: 4%;
+        left: 4%;
+      }
+
+      /* Qui inverti i colori rispetto a prima */
+      .testoBianco {
+        color: #666; /* su casella chiara scritta scura */
+      }
+
+      .testoNero {
+        color: #eee; /* su casella scura scritta chiara */
+      }
+
+      .pezzo {
+        width: 80%;
+        height: 80%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .pezzo img {
+        width: 100%;
+        height: auto;
+      }
+      .pezzo.selezionato {
+        outline: 3px solid #ff6600;
+        outline-offset: 2px;
+        border-radius: 4px;
+        box-shadow: 0 0 8px #ff6600;
+      }
+
+      @media (min-width: 600px) {
+        .scacchiera {
+          width: 600px;
+          height: 600px;
+        }
+      }
+
+      @media (max-width: 600px) {
+        .coordinate {
+          font-size: 8px;
+        }
+      }
+    </style>
+    <script>
+      let pezzoSelezionato = null;
+      let turnoBianco = true;
+
+      window.onload = () => {
+        const caselle = document.getElementsByClassName("casella");
+        for (let casella of caselle) {
+          casella.addEventListener("click", () =>
+            gestisciClickCasella(casella)
+          );
+        }
+        aggiornaGestioneClickPezzi();
+      };
+
+      function aggiornaGestioneClickPezzi() {
+        const pezzi = document.getElementsByClassName("pezzo");
+        for (let pezzo of pezzi) {
+          pezzo.onclick = (e) => {
+            e.stopPropagation();
+            gestisciClickPezzo(pezzo);
+          };
+        }
+      }
+
+      function gestisciClickPezzo(pezzo) {
+        const colore = pezzo.getAttribute("colore");
+        if (
+          (turnoBianco && colore === "bianco") ||
+          (!turnoBianco && colore === "nero")
+        ) {
+          if (pezzo === pezzoSelezionato) {
+            pezzo.classList.remove("selezionato");
+            pezzoSelezionato = null;
+          } else {
+            if (pezzoSelezionato)
+              pezzoSelezionato.classList.remove("selezionato");
+            pezzoSelezionato = pezzo;
+            pezzo.classList.add("selezionato");
+          }
+        }
+      }
+
+      function gestisciClickCasella(casella) {
+        if (!pezzoSelezionato) return;
+
+        const pezzoDestinazione = casella.querySelector(".pezzo");
+        if (
+          pezzoDestinazione &&
+          pezzoDestinazione.getAttribute("colore") ===
+            pezzoSelezionato.getAttribute("colore")
+        )
+          return;
+
+        if (pezzoSelezionato.classList.contains("pedone")) {
+          const casellaPartenza = pezzoSelezionato.parentElement;
+          if (!mossaValidaPedone(casellaPartenza, casella, pezzoSelezionato))
+            return;
+        } else {
+          // Per ora blocco gli altri pezzi (non implementati)
+          return;
+        }
+
+        casella.innerHTML = "";
+        casella.appendChild(pezzoSelezionato);
+        pezzoSelezionato.classList.remove("selezionato");
+        pezzoSelezionato = null;
+        turnoBianco = !turnoBianco;
+        aggiornaGestioneClickPezzi();
+      }
+
+      function mossaValidaPedone(orig, dest, pezzo) {
+        const idOrig = orig.id;
+        const idDest = dest.id;
+        if (!idOrig || !idDest) return false;
+
+        const colOrig = idOrig[0];
+        const rigaOrig = parseInt(idOrig[1]);
+        const colDest = idDest[0];
+        const rigaDest = parseInt(idDest[1]);
+
+        const colore = pezzo.getAttribute("colore");
+
+        const colDiff = colDest.charCodeAt(0) - colOrig.charCodeAt(0);
+        const rigaDiff = rigaDest - rigaOrig;
+
+        // Movimento avanti semplice (1 casella libera)
+        if (colDiff === 0) {
+          if (colore === "bianco") {
+            // prima mossa può avanzare 2 caselle
+            if (rigaOrig === 2) {
+              if (
+                (rigaDiff === 1 && dest.children.length === 0) ||
+                (rigaDiff === 2 &&
+                  dest.children.length === 0 &&
+                  // controlla casella intermedia vuota
+                  document.getElementById(colOrig + "3").children.length === 0)
+              ) {
+                return true;
+              }
+            } else {
+              return rigaDiff === 1 && dest.children.length === 0;
+            }
+          } else {
+            // pedone nero
+            if (rigaOrig === 7) {
+              if (
+                (rigaDiff === -1 && dest.children.length === 0) ||
+                (rigaDiff === -2 &&
+                  dest.children.length === 0 &&
+                  document.getElementById(colOrig + "6").children.length === 0)
+              ) {
+                return true;
+              }
+            } else {
+              return rigaDiff === -1 && dest.children.length === 0;
+            }
+          }
+        }
+
+        // Cattura diagonale (1 casella in diagonale con pezzo avversario)
+        if (Math.abs(colDiff) === 1) {
+          if (colore === "bianco" && rigaDiff === 1) {
+            return (
+              dest.children.length === 1 &&
+              dest.querySelector(".pezzo").getAttribute("colore") === "nero"
+            );
+          }
+          if (colore === "nero" && rigaDiff === -1) {
+            return (
+              dest.children.length === 1 &&
+              dest.querySelector(".pezzo").getAttribute("colore") === "bianco"
+            );
+          }
+        }
+
+        return false;
+      }
+    </script>
   </head>
   <body>
     <div class="scacchiera">
       <!-- Riga 8 -->
-      <div class="casella bianca">
+      <div id="a8" class="casella bianca">
         <div class="pezzo torre" colore="nero">
           <img src="Torre-Nero.png" alt="Torre Nera" />
         </div>
       </div>
-      <div class="casella nera">
+      <div id="b8" class="casella nera">
         <div class="pezzo cavallo" colore="nero">
           <img src="Cavallo-Nero.png" alt="Cavallo Nero" />
         </div>
       </div>
-      <div class="casella bianca">
+      <div id="c8" class="casella bianca">
         <div class="pezzo alfiere" colore="nero">
           <img src="Alfiere-Nero.png" alt="Alfiere Nero" />
         </div>
       </div>
-      <div class="casella nera">
+      <div id="d8" class="casella nera">
         <div class="pezzo regina" colore="nero">
           <img src="Regina-Nero.png" alt="Regina Nera" />
         </div>
       </div>
-      <div class="casella bianca">
+      <div id="e8" class="casella bianca">
         <div class="pezzo re" colore="nero">
           <img src="Re-Nero.png" alt="Re Nero" />
         </div>
       </div>
-      <div class="casella nera">
+      <div id="f8" class="casella nera">
         <div class="pezzo alfiere" colore="nero">
           <img src="Alfiere-Nero.png" alt="Alfiere Nero" />
         </div>
       </div>
-      <div class="casella bianca">
+      <div id="g8" class="casella bianca">
         <div class="pezzo cavallo" colore="nero">
           <img src="Cavallo-Nero.png" alt="Cavallo Nero" />
         </div>
       </div>
-      <div class="casella nera">
+      <div id="h8" class="casella nera">
         <div class="coordinate riga testoBianco">8</div>
         <div class="pezzo torre" colore="nero">
           <img src="Torre-Nero.png" alt="Torre Nera" />
         </div>
       </div>
 
-      <!-- Riga 7 -->
-      <!-- 8 pedoni neri -->
-      <div class="casella nera"><div class="pezzo pedone" colore="nero"><img src="Pedone-Nero.png" alt="Pedone Nero" /></div></div>
-      <div class="casella bianca"><div class="pezzo pedone" colore="nero"><img src="Pedone-Nero.png" alt="Pedone Nero" /></div></div>
-      <div class="casella nera"><div class="pezzo pedone" colore="nero"><img src="Pedone-Nero.png" alt="Pedone Nero" /></div></div>
-      <div class="casella bianca"><div class="pezzo pedone" colore="nero"><img src="Pedone-Nero.png" alt="Pedone Nero" /></div></div>
-      <div class="casella nera"><div class="pezzo pedone" colore="nero"><img src="Pedone-Nero.png" alt="Pedone Nero" /></div></div>
-      <div class="casella bianca"><div class="pezzo pedone" colore="nero"><img src="Pedone-Nero.png" alt="Pedone Nero" /></div></div>
-      <div class="casella nera"><div class="pezzo pedone" colore="nero"><img src="Pedone-Nero.png" alt="Pedone Nero" /></div></div>
-      <div class="casella bianca">
+      <!-- Riga 7 (8 pedoni neri) -->
+      <div id="a7" class="casella nera">
+        <div class="pezzo pedone" colore="nero">
+          <img src="Pedone-Nero.png" alt="Pedone Nero" />
+        </div>
+      </div>
+      <div id="b7" class="casella bianca">
+        <div class="pezzo pedone" colore="nero">
+          <img src="Pedone-Nero.png" alt="Pedone Nero" />
+        </div>
+      </div>
+      <div id="c7" class="casella nera">
+        <div class="pezzo pedone" colore="nero">
+          <img src="Pedone-Nero.png" alt="Pedone Nero" />
+        </div>
+      </div>
+      <div id="d7" class="casella bianca">
+        <div class="pezzo pedone" colore="nero">
+          <img src="Pedone-Nero.png" alt="Pedone Nero" />
+        </div>
+      </div>
+      <div id="e7" class="casella nera">
+        <div class="pezzo pedone" colore="nero">
+          <img src="Pedone-Nero.png" alt="Pedone Nero" />
+        </div>
+      </div>
+      <div id="f7" class="casella bianca">
+        <div class="pezzo pedone" colore="nero">
+          <img src="Pedone-Nero.png" alt="Pedone Nero" />
+        </div>
+      </div>
+      <div id="g7" class="casella nera">
+        <div class="pezzo pedone" colore="nero">
+          <img src="Pedone-Nero.png" alt="Pedone Nero" />
+        </div>
+      </div>
+      <div id="h7" class="casella bianca">
         <div class="coordinate riga testoNero">7</div>
         <div class="pezzo pedone" colore="nero">
           <img src="Pedone-Nero.png" alt="Pedone Nero" />
         </div>
       </div>
 
-      <!-- Riga 6 a 3 (vuote) -->
-      <!-- Riga 6 -->
-      <div class="casella bianca"></div><div class="casella nera"></div><div class="casella bianca"></div><div class="casella nera"></div>
-      <div class="casella bianca"></div><div class="casella nera"></div><div class="casella bianca"></div>
-      <div class="casella nera"><div class="coordinate riga testoBianco">6</div></div>
+      <!-- Riga 6 (vuota) -->
+      <div id="a6" class="casella bianca"></div>
+      <div id="b6" class="casella nera"></div>
+      <div id="c6" class="casella bianca"></div>
+      <div id="d6" class="casella nera"></div>
+      <div id="e6" class="casella bianca"></div>
+      <div id="f6" class="casella nera"></div>
+      <div id="g6" class="casella bianca"></div>
+      <div id="h6" class="casella nera">
+        <div class="coordinate riga testoBianco">6</div>
+      </div>
 
-      <!-- Riga 5 -->
-      <div class="casella nera"></div><div class="casella bianca"></div><div class="casella nera"></div><div class="casella bianca"></div>
-      <div class="casella nera"></div><div class="casella bianca"></div><div class="casella nera"></div>
-      <div class="casella bianca"><div class="coordinate riga testoNero">5</div></div>
+      <!-- Riga 5 (vuota) -->
+      <div id="a5" class="casella nera"></div>
+      <div id="b5" class="casella bianca"></div>
+      <div id="c5" class="casella nera"></div>
+      <div id="d5" class="casella bianca"></div>
+      <div id="e5" class="casella nera"></div>
+      <div id="f5" class="casella bianca"></div>
+      <div id="g5" class="casella nera"></div>
+      <div id="h5" class="casella bianca">
+        <div class="coordinate riga testoNero">5</div>
+      </div>
 
-      <!-- Riga 4 -->
-      <div class="casella bianca"></div><div class="casella nera"></div><div class="casella bianca"></div><div class="casella nera"></div>
-      <div class="casella bianca"></div><div class="casella nera"></div><div class="casella bianca"></div>
-      <div class="casella nera"><div class="coordinate riga testoBianco">4</div></div>
+      <!-- Riga 4 (vuota) -->
+      <div id="a4" class="casella bianca"></div>
+      <div id="b4" class="casella nera"></div>
+      <div id="c4" class="casella bianca"></div>
+      <div id="d4" class="casella nera"></div>
+      <div id="e4" class="casella bianca"></div>
+      <div id="f4" class="casella nera"></div>
+      <div id="g4" class="casella bianca"></div>
+      <div id="h4" class="casella nera">
+        <div class="coordinate riga testoBianco">4</div>
+      </div>
 
-      <!-- Riga 3 -->
-      <div class="casella nera"></div><div class="casella bianca"></div><div class="casella nera"></div><div class="casella bianca"></div>
-      <div class="casella nera"></div><div class="casella bianca"></div><div class="casella nera"></div>
-      <div class="casella bianca"><div class="coordinate riga testoNero">3</div></div>
+      <!-- Riga 3 (vuota) -->
+      <div id="a3" class="casella nera"></div>
+      <div id="b3" class="casella bianca"></div>
+      <div id="c3" class="casella nera"></div>
+      <div id="d3" class="casella bianca"></div>
+      <div id="e3" class="casella nera"></div>
+      <div id="f3" class="casella bianca"></div>
+      <div id="g3" class="casella nera"></div>
+      <div id="h3" class="casella bianca">
+        <div class="coordinate riga testoNero">3</div>
+      </div>
 
-      <!-- Riga 2 -->
-      <!-- 8 pedoni bianchi -->
-      <div class="casella bianca"><div class="pezzo pedone" colore="bianco"><img src="Pedone-Bianco.png" alt="Pedone Bianco" /></div></div>
-      <div class="casella nera"><div class="pezzo pedone" colore="bianco"><img src="Pedone-Bianco.png" alt="Pedone Bianco" /></div></div>
-      <div class="casella bianca"><div class="pezzo pedone" colore="bianco"><img src="Pedone-Bianco.png" alt="Pedone Bianco" /></div></div>
-      <div class="casella nera"><div class="pezzo pedone" colore="bianco"><img src="Pedone-Bianco.png" alt="Pedone Bianco" /></div></div>
-      <div class="casella bianca"><div class="pezzo pedone" colore="bianco"><img src="Pedone-Bianco.png" alt="Pedone Bianco" /></div></div>
-      <div class="casella nera"><div class="pezzo pedone" colore="bianco"><img src="Pedone-Bianco.png" alt="Pedone Bianco" /></div></div>
-      <div class="casella bianca"><div class="pezzo pedone" colore="bianco"><img src="Pedone-Bianco.png" alt="Pedone Bianco" /></div></div>
-      <div class="casella nera">
+      <!-- Riga 2 (pedoni bianchi) -->
+      <div id="a2" class="casella bianca">
+        <div class="pezzo pedone" colore="bianco">
+          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
+        </div>
+      </div>
+      <div id="b2" class="casella nera">
+        <div class="pezzo pedone" colore="bianco">
+          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
+        </div>
+      </div>
+      <div id="c2" class="casella bianca">
+        <div class="pezzo pedone" colore="bianco">
+          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
+        </div>
+      </div>
+      <div id="d2" class="casella nera">
+        <div class="pezzo pedone" colore="bianco">
+          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
+        </div>
+      </div>
+      <div id="e2" class="casella bianca">
+        <div class="pezzo pedone" colore="bianco">
+          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
+        </div>
+      </div>
+      <div id="f2" class="casella nera">
+        <div class="pezzo pedone" colore="bianco">
+          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
+        </div>
+      </div>
+      <div id="g2" class="casella bianca">
+        <div class="pezzo pedone" colore="bianco">
+          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
+        </div>
+      </div>
+      <div id="h2" class="casella nera">
         <div class="coordinate riga testoBianco">2</div>
         <div class="pezzo pedone" colore="bianco">
           <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
         </div>
       </div>
 
-      <!-- Riga 1 -->
-      <div class="casella nera">
-        <div class="coordinate testoBianco">a</div>
+      <!-- Riga 1 (pezzi bianchi) -->
+      <div id="a1" class="casella nera">
+        <div class="coordinate colonna testoBianco">a</div>
         <div class="pezzo torre" colore="bianco">
           <img src="Torre-Bianco.png" alt="Torre Bianca" />
         </div>
       </div>
-      <div class="casella bianca">
-        <div class="coordinate testoNero">b</div>
+      <div id="b1" class="casella bianca">
+        <div class="coordinate colonna testoNero">b</div>
         <div class="pezzo cavallo" colore="bianco">
           <img src="Cavallo-Bianco.png" alt="Cavallo Bianco" />
         </div>
       </div>
-      <div class="casella nera">
-        <div class="coordinate testoBianco">c</div>
+      <div id="c1" class="casella nera">
+        <div class="coordinate colonna testoBianco">c</div>
         <div class="pezzo alfiere" colore="bianco">
           <img src="Alfiere-Bianco.png" alt="Alfiere Bianco" />
         </div>
       </div>
-      <div class="casella bianca">
-        <div class="coordinate testoNero">d</div>
+      <div id="d1" class="casella bianca">
+        <div class="coordinate colonna testoNero">d</div>
         <div class="pezzo regina" colore="bianco">
           <img src="Regina-Bianco.png" alt="Regina Bianca" />
         </div>
       </div>
-      <div class="casella nera">
-        <div class="coordinate testoBianco">e</div>
+      <div id="e1" class="casella nera">
+        <div class="coordinate colonna testoBianco">e</div>
         <div class="pezzo re" colore="bianco">
           <img src="Re-Bianco.png" alt="Re Bianco" />
         </div>
       </div>
-      <div class="casella bianca">
-        <div class="coordinate testoNero">f</div>
+      <div id="f1" class="casella bianca">
+        <div class="coordinate colonna testoNero">f</div>
         <div class="pezzo alfiere" colore="bianco">
           <img src="Alfiere-Bianco.png" alt="Alfiere Bianco" />
         </div>
       </div>
-      <div class="casella nera">
-        <div class="coordinate testoBianco">g</div>
+      <div id="g1" class="casella nera">
+        <div class="coordinate colonna testoBianco">g</div>
         <div class="pezzo cavallo" colore="bianco">
           <img src="Cavallo-Bianco.png" alt="Cavallo Bianco" />
         </div>
       </div>
-      <div class="casella bianca">
+      <div id="h1" class="casella bianca">
         <div class="coordinate riga testoNero">1</div>
-        <div class="coordinate testoNero">h</div>
+        <div class="coordinate colonna testoNero">h</div>
         <div class="pezzo torre" colore="bianco">
           <img src="Torre-Bianco.png" alt="Torre Bianca" />
         </div>
       </div>
     </div>
-    <script src="main.js"></script>
   </body>
 </html>
