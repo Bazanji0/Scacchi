@@ -34,21 +34,6 @@ Questo è un progettino completo per giocare a scacchi direttamente nel browser.
 - `controllaScacco()` cerca se uno dei re è sotto scacco.
 - `controllaFinePartita()` controlla se uno dei re è stato mangiato.
 
-## ✅ Cose utili
-- Funziona al 100% senza internet.
-- Non ha bisogno di immagini: tutto è con simboli.
-- È modificabile facilmente (puoi cambiarci stile, logica, ecc.).
-
-## 🧪 Debug
-- Puoi aprire la console del browser (F12 > Console) per vedere eventuali errori o log che aggiungi.
-
-## 💡 Idee extra
-Se vuoi migliorarlo o aggiungere cose fighe:
-- Mostrare le mosse possibili quando selezioni un pezzo
-- Evidenziare l'ultima mossa
-- Aggiungere suoni
-- Implementare arrocco, promozione, en passant
-- Aggiungere un timer o contatore mosse
 
 ## 📦 Come usarlo
 1. Salva il file con estensione `.html`
