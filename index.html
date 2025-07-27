@@ -6,16 +6,22 @@
     <style>
       body {
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        height: 100vh;
+        min-height: 100vh;
+        margin: 0;
+        font-family: Arial, sans-serif;
       }
 
       .scacchiera {
         width: 80vw;
         height: 80vw;
+        max-width: 600px;
+        max-height: 600px;
         display: flex;
         flex-wrap: wrap;
+        border: 2px solid #333;
       }
 
       .casella {
@@ -25,39 +31,41 @@
         justify-content: center;
         align-items: center;
         position: relative;
+        cursor: pointer;
       }
 
       .bianca {
-        background-color: #eee; /* chiaro */
+        background-color: #f0d9b5;
       }
 
       .nera {
-        background-color: #666; /* scuro */
+        background-color: #b58863;
       }
 
       .coordinate {
         position: absolute;
-        bottom: 4%;
-        left: 4%;
-        font-size: 12px;
+        font-size: 10px;
         font-weight: bold;
-        font-family: Verdana, Geneva, Tahoma, sans-serif;
+        font-family: Arial, sans-serif;
+        pointer-events: none;
       }
 
-      /* Coordinata sopra per numeri di riga */
-      .riga {
-        bottom: auto;
-        top: 4%;
-        left: 4%;
+      .coordinate.riga {
+        top: 2px;
+        left: 2px;
       }
 
-      /* Qui inverti i colori rispetto a prima */
+      .coordinate.colonna {
+        bottom: 2px;
+        right: 2px;
+      }
+
       .testoBianco {
-        color: #666; /* su casella chiara scritta scura */
+        color: #b58863;
       }
 
       .testoNero {
-        color: #eee; /* su casella scura scritta chiara */
+        color: #f0d9b5;
       }
 
       .pezzo {
@@ -66,12 +74,11 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        font-size: 40px;
+        cursor: pointer;
+        user-select: none;
       }
 
-      .pezzo img {
-        width: 100%;
-        height: auto;
-      }
       .pezzo.selezionato {
         outline: 3px solid #ff6600;
         outline-offset: 2px;
@@ -79,387 +86,429 @@
         box-shadow: 0 0 8px #ff6600;
       }
 
-      @media (min-width: 600px) {
-        .scacchiera {
-          width: 600px;
-          height: 600px;
-        }
+      .casella.scacco {
+        outline: 4px solid red;
+        outline-offset: -2px;
       }
 
-      @media (max-width: 600px) {
-        .coordinate {
-          font-size: 8px;
-        }
+      .casella.mossa-valida {
+        background-color: rgba(255, 255, 0, 0.3);
+      }
+
+      .pannello {
+        margin: 20px;
+        text-align: center;
+      }
+
+      .catturati {
+        margin: 10px 0;
+        font-size: 20px;
+      }
+
+      button {
+        padding: 10px 20px;
+        margin: 5px;
+        font-size: 16px;
+        cursor: pointer;
+      }
+
+      #turno {
+        font-size: 18px;
+        font-weight: bold;
+        margin: 10px 0;
       }
     </style>
-    <script>
-      let pezzoSelezionato = null;
-      let turnoBianco = true;
+  </head>
+  <body>
+    <div class="scacchiera" id="scacchiera">
+      <!-- Le caselle verranno generate dinamicamente -->
+    </div>
+    
+    <div class="pannello">
+      <button onclick="controllaScacco()">Controlla Scacco</button>
+      <button onclick="nuovaPartita()">Nuova Partita</button>
+      <p id="turno">Turno: Bianco</p>
+      <div class="catturati">
+        <p><strong>Pezzi catturati:</strong></p>
+        <p>Bianchi: <span id="catturati-bianchi"></span></p>
+        <p>Neri: <span id="catturati-neri"></span></p>
+      </div>
+    </div>
 
-      window.onload = () => {
-        const caselle = document.getElementsByClassName("casella");
-        for (let casella of caselle) {
-          casella.addEventListener("click", () =>
-            gestisciClickCasella(casella)
-          );
+    <script>
+      // Simboli Unicode per i pezzi
+      const PEZZI = {
+        bianco: {
+          re: '♔',
+          regina: '♕',
+          torre: '♖',
+          alfiere: '♗',
+          cavallo: '♘',
+          pedone: '♙'
+        },
+        nero: {
+          re: '♚',
+          regina: '♛',
+          torre: '♜',
+          alfiere: '♝',
+          cavallo: '♞',
+          pedone: '♟'
         }
-        aggiornaGestioneClickPezzi();
       };
 
-      function aggiornaGestioneClickPezzi() {
-        const pezzi = document.getElementsByClassName("pezzo");
-        for (let pezzo of pezzi) {
-          pezzo.onclick = (e) => {
-            e.stopPropagation();
-            gestisciClickPezzo(pezzo);
-          };
-        }
-      }
+      // Posizione iniziale
+      const POSIZIONE_INIZIALE = [
+        ['torre', 'cavallo', 'alfiere', 'regina', 're', 'alfiere', 'cavallo', 'torre'],
+        ['pedone', 'pedone', 'pedone', 'pedone', 'pedone', 'pedone', 'pedone', 'pedone'],
+        [null, null, null, null, null, null, null, null],
+        [null, null, null, null, null, null, null, null],
+        [null, null, null, null, null, null, null, null],
+        [null, null, null, null, null, null, null, null],
+        ['pedone', 'pedone', 'pedone', 'pedone', 'pedone', 'pedone', 'pedone', 'pedone'],
+        ['torre', 'cavallo', 'alfiere', 'regina', 're', 'alfiere', 'cavallo', 'torre']
+      ];
 
-      function gestisciClickPezzo(pezzo) {
-        const colore = pezzo.getAttribute("colore");
-        if (
-          (turnoBianco && colore === "bianco") ||
-          (!turnoBianco && colore === "nero")
-        ) {
-          if (pezzo === pezzoSelezionato) {
-            pezzo.classList.remove("selezionato");
-            pezzoSelezionato = null;
-          } else {
-            if (pezzoSelezionato)
-              pezzoSelezionato.classList.remove("selezionato");
-            pezzoSelezionato = pezzo;
-            pezzo.classList.add("selezionato");
+      let scacchiera = [];
+      let pezzoSelezionato = null;
+      let casellaSelezionata = null;
+      let turnoBianco = true;
+      const catturatiBianchi = [];
+      const catturatiNeri = [];
+
+      function inizializzaScacchiera() {
+        const container = document.getElementById('scacchiera');
+        container.innerHTML = '';
+        scacchiera = [];
+
+        for (let riga = 0; riga < 8; riga++) {
+          scacchiera[riga] = [];
+          for (let col = 0; col < 8; col++) {
+            const casella = document.createElement('div');
+            const id = String.fromCharCode(97 + col) + (8 - riga);
+            casella.id = id;
+            casella.className = `casella ${(riga + col) % 2 === 0 ? 'bianca' : 'nera'}`;
+            
+            // Aggiungi coordinate
+            if (col === 0) {
+              const coordRiga = document.createElement('div');
+              coordRiga.className = `coordinate riga ${(riga + col) % 2 === 0 ? 'testoBianco' : 'testoNero'}`;
+              coordRiga.textContent = 8 - riga;
+              casella.appendChild(coordRiga);
+            }
+            if (riga === 7) {
+              const coordCol = document.createElement('div');
+              coordCol.className = `coordinate colonna ${(riga + col) % 2 === 0 ? 'testoBianco' : 'testoNero'}`;
+              coordCol.textContent = String.fromCharCode(97 + col);
+              casella.appendChild(coordCol);
+            }
+
+            // Aggiungi pezzo se presente
+            const tipoPezzo = POSIZIONE_INIZIALE[riga][col];
+            if (tipoPezzo) {
+              const colore = riga < 2 ? 'nero' : 'bianco';
+              const pezzo = document.createElement('div');
+              pezzo.className = `pezzo ${tipoPezzo}`;
+              pezzo.setAttribute('colore', colore);
+              pezzo.textContent = PEZZI[colore][tipoPezzo];
+              casella.appendChild(pezzo);
+              scacchiera[riga][col] = { tipo: tipoPezzo, colore: colore };
+            } else {
+              scacchiera[riga][col] = null;
+            }
+
+            casella.addEventListener('click', () => gestisciClick(riga, col));
+            container.appendChild(casella);
           }
         }
       }
 
-      function gestisciClickCasella(casella) {
-        if (!pezzoSelezionato) return;
+      function gestisciClick(riga, col) {
+        const casella = document.getElementById(String.fromCharCode(97 + col) + (8 - riga));
+        const pezzo = scacchiera[riga][col];
 
-        const pezzoDestinazione = casella.querySelector(".pezzo");
-        if (
-          pezzoDestinazione &&
-          pezzoDestinazione.getAttribute("colore") ===
-            pezzoSelezionato.getAttribute("colore")
-        )
-          return;
-
-        if (pezzoSelezionato.classList.contains("pedone")) {
-          const casellaPartenza = pezzoSelezionato.parentElement;
-          if (!mossaValidaPedone(casellaPartenza, casella, pezzoSelezionato))
-            return;
-        } else {
-          // Per ora blocco gli altri pezzi (non implementati)
+        // Se clicco sullo stesso pezzo già selezionato, deselezionalo
+        if (pezzoSelezionato && casellaSelezionata && 
+            casellaSelezionata.riga === riga && casellaSelezionata.col === col) {
+          deselezionaPezzo();
           return;
         }
 
-        casella.innerHTML = "";
-        casella.appendChild(pezzoSelezionato);
-        pezzoSelezionato.classList.remove("selezionato");
+        // Se c'è un pezzo selezionato
+        if (pezzoSelezionato) {
+          // Se clicco su un altro pezzo del mio colore, selezionalo
+          if (pezzo && pezzo.colore === (turnoBianco ? 'bianco' : 'nero')) {
+            selezionaPezzo(riga, col);
+          }
+          // Altrimenti prova a muovere
+          else if (mossaValida(casellaSelezionata.riga, casellaSelezionata.col, riga, col)) {
+            eseguiMossa(casellaSelezionata.riga, casellaSelezionata.col, riga, col);
+            deselezionaPezzo();
+            turnoBianco = !turnoBianco;
+            aggiornaTurno();
+            controllaFinePartita();
+          } 
+          // Mossa non valida, deseleziona
+          else {
+            deselezionaPezzo();
+          }
+        } 
+        // Nessun pezzo selezionato, seleziona se è del colore giusto
+        else if (pezzo && pezzo.colore === (turnoBianco ? 'bianco' : 'nero')) {
+          selezionaPezzo(riga, col);
+        }
+      }
+
+      function selezionaPezzo(riga, col) {
+        // PRIMA deseleziona tutto
+        document.querySelectorAll('.pezzo').forEach(p => p.classList.remove('selezionato'));
+        
+        const casella = document.getElementById(String.fromCharCode(97 + col) + (8 - riga));
+        const pezzoElement = casella.querySelector('.pezzo');
+        
+        pezzoSelezionato = scacchiera[riga][col];
+        casellaSelezionata = { riga, col };
+        pezzoElement.classList.add('selezionato');
+      }
+
+      function deselezionaPezzo() {
+        // Rimuovi evidenziazione da tutti i pezzi
+        document.querySelectorAll('.pezzo').forEach(p => p.classList.remove('selezionato'));
+        
         pezzoSelezionato = null;
-        turnoBianco = !turnoBianco;
-        aggiornaGestioneClickPezzi();
+        casellaSelezionata = null;
       }
 
-      function mossaValidaPedone(orig, dest, pezzo) {
-        const idOrig = orig.id;
-        const idDest = dest.id;
-        if (!idOrig || !idDest) return false;
-
-        const colOrig = idOrig[0];
-        const rigaOrig = parseInt(idOrig[1]);
-        const colDest = idDest[0];
-        const rigaDest = parseInt(idDest[1]);
-
-        const colore = pezzo.getAttribute("colore");
-
-        const colDiff = colDest.charCodeAt(0) - colOrig.charCodeAt(0);
-        const rigaDiff = rigaDest - rigaOrig;
-
-        // Movimento avanti semplice (1 casella libera)
-        if (colDiff === 0) {
-          if (colore === "bianco") {
-            // prima mossa può avanzare 2 caselle
-            if (rigaOrig === 2) {
-              if (
-                (rigaDiff === 1 && dest.children.length === 0) ||
-                (rigaDiff === 2 &&
-                  dest.children.length === 0 &&
-                  // controlla casella intermedia vuota
-                  document.getElementById(colOrig + "3").children.length === 0)
-              ) {
-                return true;
-              }
-            } else {
-              return rigaDiff === 1 && dest.children.length === 0;
-            }
+      function eseguiMossa(rigaOrig, colOrig, rigaDest, colDest) {
+        // Cattura pezzo se presente
+        if (scacchiera[rigaDest][colDest]) {
+          const pezzoCatturato = scacchiera[rigaDest][colDest];
+          if (pezzoCatturato.colore === 'bianco') {
+            catturatiBianchi.push(PEZZI.bianco[pezzoCatturato.tipo]);
           } else {
-            // pedone nero
-            if (rigaOrig === 7) {
-              if (
-                (rigaDiff === -1 && dest.children.length === 0) ||
-                (rigaDiff === -2 &&
-                  dest.children.length === 0 &&
-                  document.getElementById(colOrig + "6").children.length === 0)
-              ) {
-                return true;
-              }
-            } else {
-              return rigaDiff === -1 && dest.children.length === 0;
-            }
+            catturatiNeri.push(PEZZI.nero[pezzoCatturato.tipo]);
           }
+          aggiornaListaCatturati();
         }
 
-        // Cattura diagonale (1 casella in diagonale con pezzo avversario)
-        if (Math.abs(colDiff) === 1) {
-          if (colore === "bianco" && rigaDiff === 1) {
-            return (
-              dest.children.length === 1 &&
-              dest.querySelector(".pezzo").getAttribute("colore") === "nero"
-            );
+        // Muovi il pezzo
+        scacchiera[rigaDest][colDest] = scacchiera[rigaOrig][colOrig];
+        scacchiera[rigaOrig][colOrig] = null;
+
+        // Aggiorna l'interfaccia
+        const casellaOrig = document.getElementById(String.fromCharCode(97 + colOrig) + (8 - rigaOrig));
+        const casellaDest = document.getElementById(String.fromCharCode(97 + colDest) + (8 - rigaDest));
+        
+        const pezzoElement = casellaOrig.querySelector('.pezzo');
+        casellaOrig.removeChild(pezzoElement);
+        
+        // Rimuovi pezzo catturato se presente
+        const pezzoCatturato = casellaDest.querySelector('.pezzo');
+        if (pezzoCatturato) {
+          casellaDest.removeChild(pezzoCatturato);
+        }
+        
+        casellaDest.appendChild(pezzoElement);
+      }
+
+      function mossaValida(rigaOrig, colOrig, rigaDest, colDest) {
+        // Controlla limiti
+        if (rigaDest < 0 || rigaDest > 7 || colDest < 0 || colDest > 7) return false;
+        
+        // Non può muovere sulla stessa casella
+        if (rigaOrig === rigaDest && colOrig === colDest) return false;
+        
+        const pezzo = scacchiera[rigaOrig][colOrig];
+        const pezzoDestinazione = scacchiera[rigaDest][colDest];
+        
+        // Non può catturare un pezzo del proprio colore
+        if (pezzoDestinazione && pezzoDestinazione.colore === pezzo.colore) return false;
+
+        const deltaRiga = rigaDest - rigaOrig;
+        const deltaCol = colDest - colOrig;
+
+        switch (pezzo.tipo) {
+          case 'pedone':
+            return mossaValidaPedone(rigaOrig, colOrig, rigaDest, colDest, pezzo.colore);
+          case 'torre':
+            return mossaValidaTorre(rigaOrig, colOrig, rigaDest, colDest);
+          case 'alfiere':
+            return mossaValidaAlfiere(rigaOrig, colOrig, rigaDest, colDest);
+          case 'regina':
+            return mossaValidaTorre(rigaOrig, colOrig, rigaDest, colDest) || 
+                   mossaValidaAlfiere(rigaOrig, colOrig, rigaDest, colDest);
+          case 'cavallo':
+            return mossaValidaCavallo(deltaRiga, deltaCol);
+          case 're':
+            return mossaValidaRe(deltaRiga, deltaCol);
+          default:
+            return false;
+        }
+      }
+
+      function mossaValidaPedone(rigaOrig, colOrig, rigaDest, colDest, colore) {
+        const deltaRiga = rigaDest - rigaOrig;
+        const deltaCol = Math.abs(colDest - colOrig);
+        const direzione = colore === 'bianco' ? -1 : 1;
+        const rigaIniziale = colore === 'bianco' ? 6 : 1;
+
+        // Movimento in avanti
+        if (deltaCol === 0) {
+          if (deltaRiga === direzione && !scacchiera[rigaDest][colDest]) {
+            return true;
           }
-          if (colore === "nero" && rigaDiff === -1) {
-            return (
-              dest.children.length === 1 &&
-              dest.querySelector(".pezzo").getAttribute("colore") === "bianco"
-            );
+          if (rigaOrig === rigaIniziale && deltaRiga === 2 * direzione && 
+              !scacchiera[rigaDest][colDest] && !scacchiera[rigaOrig + direzione][colOrig]) {
+            return true;
           }
+        }
+        // Cattura diagonale
+        else if (deltaCol === 1 && deltaRiga === direzione && scacchiera[rigaDest][colDest]) {
+          return true;
         }
 
         return false;
       }
+
+      function mossaValidaTorre(rigaOrig, colOrig, rigaDest, colDest) {
+        if (rigaOrig !== rigaDest && colOrig !== colDest) return false;
+
+        const deltaRiga = Math.sign(rigaDest - rigaOrig);
+        const deltaCol = Math.sign(colDest - colOrig);
+
+        let r = rigaOrig + deltaRiga;
+        let c = colOrig + deltaCol;
+
+        while (r !== rigaDest || c !== colDest) {
+          if (scacchiera[r][c]) return false;
+          r += deltaRiga;
+          c += deltaCol;
+        }
+
+        return true;
+      }
+
+      function mossaValidaAlfiere(rigaOrig, colOrig, rigaDest, colDest) {
+        if (Math.abs(rigaDest - rigaOrig) !== Math.abs(colDest - colOrig)) return false;
+
+        const deltaRiga = Math.sign(rigaDest - rigaOrig);
+        const deltaCol = Math.sign(colDest - colOrig);
+
+        let r = rigaOrig + deltaRiga;
+        let c = colOrig + deltaCol;
+
+        while (r !== rigaDest || c !== colDest) {
+          if (scacchiera[r][c]) return false;
+          r += deltaRiga;
+          c += deltaCol;
+        }
+
+        return true;
+      }
+
+      function mossaValidaCavallo(deltaRiga, deltaCol) {
+        return (Math.abs(deltaRiga) === 2 && Math.abs(deltaCol) === 1) ||
+               (Math.abs(deltaRiga) === 1 && Math.abs(deltaCol) === 2);
+      }
+
+      function mossaValidaRe(deltaRiga, deltaCol) {
+        return Math.abs(deltaRiga) <= 1 && Math.abs(deltaCol) <= 1;
+      }
+
+      function controllaScacco() {
+        const coloreRe = turnoBianco ? 'nero' : 'bianco';
+        let posizioneRe = null;
+
+        // Trova il re
+        for (let r = 0; r < 8; r++) {
+          for (let c = 0; c < 8; c++) {
+            if (scacchiera[r][c] && scacchiera[r][c].tipo === 're' && scacchiera[r][c].colore === coloreRe) {
+              posizioneRe = { riga: r, col: c };
+              break;
+            }
+          }
+          if (posizioneRe) break;
+        }
+
+        if (!posizioneRe) return;
+
+        // Rimuovi evidenziazione precedente
+        document.querySelectorAll('.casella').forEach(c => c.classList.remove('scacco'));
+
+        // Controlla se qualche pezzo nemico minaccia il re
+        let sottoScacco = false;
+        for (let r = 0; r < 8; r++) {
+          for (let c = 0; c < 8; c++) {
+            const pezzo = scacchiera[r][c];
+            if (pezzo && pezzo.colore !== coloreRe) {
+              if (mossaValida(r, c, posizioneRe.riga, posizioneRe.col)) {
+                sottoScacco = true;
+                break;
+              }
+            }
+          }
+          if (sottoScacco) break;
+        }
+
+        if (sottoScacco) {
+          const casellaRe = document.getElementById(String.fromCharCode(97 + posizioneRe.col) + (8 - posizioneRe.riga));
+          casellaRe.classList.add('scacco');
+          alert('Scacco!');
+        } else {
+          alert('Nessuno scacco.');
+        }
+      }
+
+      function controllaFinePartita() {
+        let reBianco = false, reNero = false;
+        
+        for (let r = 0; r < 8; r++) {
+          for (let c = 0; c < 8; c++) {
+            const pezzo = scacchiera[r][c];
+            if (pezzo && pezzo.tipo === 're') {
+              if (pezzo.colore === 'bianco') reBianco = true;
+              if (pezzo.colore === 'nero') reNero = true;
+            }
+          }
+        }
+
+        if (!reBianco) {
+          alert('Scacco matto! Vince il Nero!');
+          setTimeout(nuovaPartita, 1000);
+        } else if (!reNero) {
+          alert('Scacco matto! Vince il Bianco!');
+          setTimeout(nuovaPartita, 1000);
+        }
+      }
+
+      function aggiornaListaCatturati() {
+        document.getElementById('catturati-bianchi').textContent = catturatiBianchi.join(' ');
+        document.getElementById('catturati-neri').textContent = catturatiNeri.join(' ');
+      }
+
+      function aggiornaTurno() {
+        document.getElementById('turno').textContent = `Turno: ${turnoBianco ? 'Bianco' : 'Nero'}`;
+      }
+
+      function nuovaPartita() {
+        catturatiBianchi.length = 0;
+        catturatiNeri.length = 0;
+        turnoBianco = true;
+        
+        // Deseleziona tutto
+        document.querySelectorAll('.pezzo').forEach(p => p.classList.remove('selezionato'));
+        pezzoSelezionato = null;
+        casellaSelezionata = null;
+        
+        inizializzaScacchiera();
+        aggiornaListaCatturati();
+        aggiornaTurno();
+      }
+
+      // Inizializza al caricamento
+      window.onload = function() {
+        inizializzaScacchiera();
+        aggiornaTurno();
+      };
     </script>
-  </head>
-  <body>
-    <div class="scacchiera">
-      <!-- Riga 8 -->
-      <div id="a8" class="casella bianca">
-        <div class="pezzo torre" colore="nero">
-          <img src="Torre-Nero.png" alt="Torre Nera" />
-        </div>
-      </div>
-      <div id="b8" class="casella nera">
-        <div class="pezzo cavallo" colore="nero">
-          <img src="Cavallo-Nero.png" alt="Cavallo Nero" />
-        </div>
-      </div>
-      <div id="c8" class="casella bianca">
-        <div class="pezzo alfiere" colore="nero">
-          <img src="Alfiere-Nero.png" alt="Alfiere Nero" />
-        </div>
-      </div>
-      <div id="d8" class="casella nera">
-        <div class="pezzo regina" colore="nero">
-          <img src="Regina-Nero.png" alt="Regina Nera" />
-        </div>
-      </div>
-      <div id="e8" class="casella bianca">
-        <div class="pezzo re" colore="nero">
-          <img src="Re-Nero.png" alt="Re Nero" />
-        </div>
-      </div>
-      <div id="f8" class="casella nera">
-        <div class="pezzo alfiere" colore="nero">
-          <img src="Alfiere-Nero.png" alt="Alfiere Nero" />
-        </div>
-      </div>
-      <div id="g8" class="casella bianca">
-        <div class="pezzo cavallo" colore="nero">
-          <img src="Cavallo-Nero.png" alt="Cavallo Nero" />
-        </div>
-      </div>
-      <div id="h8" class="casella nera">
-        <div class="coordinate riga testoBianco">8</div>
-        <div class="pezzo torre" colore="nero">
-          <img src="Torre-Nero.png" alt="Torre Nera" />
-        </div>
-      </div>
-
-      <!-- Riga 7 (8 pedoni neri) -->
-      <div id="a7" class="casella nera">
-        <div class="pezzo pedone" colore="nero">
-          <img src="Pedone-Nero.png" alt="Pedone Nero" />
-        </div>
-      </div>
-      <div id="b7" class="casella bianca">
-        <div class="pezzo pedone" colore="nero">
-          <img src="Pedone-Nero.png" alt="Pedone Nero" />
-        </div>
-      </div>
-      <div id="c7" class="casella nera">
-        <div class="pezzo pedone" colore="nero">
-          <img src="Pedone-Nero.png" alt="Pedone Nero" />
-        </div>
-      </div>
-      <div id="d7" class="casella bianca">
-        <div class="pezzo pedone" colore="nero">
-          <img src="Pedone-Nero.png" alt="Pedone Nero" />
-        </div>
-      </div>
-      <div id="e7" class="casella nera">
-        <div class="pezzo pedone" colore="nero">
-          <img src="Pedone-Nero.png" alt="Pedone Nero" />
-        </div>
-      </div>
-      <div id="f7" class="casella bianca">
-        <div class="pezzo pedone" colore="nero">
-          <img src="Pedone-Nero.png" alt="Pedone Nero" />
-        </div>
-      </div>
-      <div id="g7" class="casella nera">
-        <div class="pezzo pedone" colore="nero">
-          <img src="Pedone-Nero.png" alt="Pedone Nero" />
-        </div>
-      </div>
-      <div id="h7" class="casella bianca">
-        <div class="coordinate riga testoNero">7</div>
-        <div class="pezzo pedone" colore="nero">
-          <img src="Pedone-Nero.png" alt="Pedone Nero" />
-        </div>
-      </div>
-
-      <!-- Riga 6 (vuota) -->
-      <div id="a6" class="casella bianca"></div>
-      <div id="b6" class="casella nera"></div>
-      <div id="c6" class="casella bianca"></div>
-      <div id="d6" class="casella nera"></div>
-      <div id="e6" class="casella bianca"></div>
-      <div id="f6" class="casella nera"></div>
-      <div id="g6" class="casella bianca"></div>
-      <div id="h6" class="casella nera">
-        <div class="coordinate riga testoBianco">6</div>
-      </div>
-
-      <!-- Riga 5 (vuota) -->
-      <div id="a5" class="casella nera"></div>
-      <div id="b5" class="casella bianca"></div>
-      <div id="c5" class="casella nera"></div>
-      <div id="d5" class="casella bianca"></div>
-      <div id="e5" class="casella nera"></div>
-      <div id="f5" class="casella bianca"></div>
-      <div id="g5" class="casella nera"></div>
-      <div id="h5" class="casella bianca">
-        <div class="coordinate riga testoNero">5</div>
-      </div>
-
-      <!-- Riga 4 (vuota) -->
-      <div id="a4" class="casella bianca"></div>
-      <div id="b4" class="casella nera"></div>
-      <div id="c4" class="casella bianca"></div>
-      <div id="d4" class="casella nera"></div>
-      <div id="e4" class="casella bianca"></div>
-      <div id="f4" class="casella nera"></div>
-      <div id="g4" class="casella bianca"></div>
-      <div id="h4" class="casella nera">
-        <div class="coordinate riga testoBianco">4</div>
-      </div>
-
-      <!-- Riga 3 (vuota) -->
-      <div id="a3" class="casella nera"></div>
-      <div id="b3" class="casella bianca"></div>
-      <div id="c3" class="casella nera"></div>
-      <div id="d3" class="casella bianca"></div>
-      <div id="e3" class="casella nera"></div>
-      <div id="f3" class="casella bianca"></div>
-      <div id="g3" class="casella nera"></div>
-      <div id="h3" class="casella bianca">
-        <div class="coordinate riga testoNero">3</div>
-      </div>
-
-      <!-- Riga 2 (pedoni bianchi) -->
-      <div id="a2" class="casella bianca">
-        <div class="pezzo pedone" colore="bianco">
-          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
-        </div>
-      </div>
-      <div id="b2" class="casella nera">
-        <div class="pezzo pedone" colore="bianco">
-          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
-        </div>
-      </div>
-      <div id="c2" class="casella bianca">
-        <div class="pezzo pedone" colore="bianco">
-          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
-        </div>
-      </div>
-      <div id="d2" class="casella nera">
-        <div class="pezzo pedone" colore="bianco">
-          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
-        </div>
-      </div>
-      <div id="e2" class="casella bianca">
-        <div class="pezzo pedone" colore="bianco">
-          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
-        </div>
-      </div>
-      <div id="f2" class="casella nera">
-        <div class="pezzo pedone" colore="bianco">
-          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
-        </div>
-      </div>
-      <div id="g2" class="casella bianca">
-        <div class="pezzo pedone" colore="bianco">
-          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
-        </div>
-      </div>
-      <div id="h2" class="casella nera">
-        <div class="coordinate riga testoBianco">2</div>
-        <div class="pezzo pedone" colore="bianco">
-          <img src="Pedone-Bianco.png" alt="Pedone Bianco" />
-        </div>
-      </div>
-
-      <!-- Riga 1 (pezzi bianchi) -->
-      <div id="a1" class="casella nera">
-        <div class="coordinate colonna testoBianco">a</div>
-        <div class="pezzo torre" colore="bianco">
-          <img src="Torre-Bianco.png" alt="Torre Bianca" />
-        </div>
-      </div>
-      <div id="b1" class="casella bianca">
-        <div class="coordinate colonna testoNero">b</div>
-        <div class="pezzo cavallo" colore="bianco">
-          <img src="Cavallo-Bianco.png" alt="Cavallo Bianco" />
-        </div>
-      </div>
-      <div id="c1" class="casella nera">
-        <div class="coordinate colonna testoBianco">c</div>
-        <div class="pezzo alfiere" colore="bianco">
-          <img src="Alfiere-Bianco.png" alt="Alfiere Bianco" />
-        </div>
-      </div>
-      <div id="d1" class="casella bianca">
-        <div class="coordinate colonna testoNero">d</div>
-        <div class="pezzo regina" colore="bianco">
-          <img src="Regina-Bianco.png" alt="Regina Bianca" />
-        </div>
-      </div>
-      <div id="e1" class="casella nera">
-        <div class="coordinate colonna testoBianco">e</div>
-        <div class="pezzo re" colore="bianco">
-          <img src="Re-Bianco.png" alt="Re Bianco" />
-        </div>
-      </div>
-      <div id="f1" class="casella bianca">
-        <div class="coordinate colonna testoNero">f</div>
-        <div class="pezzo alfiere" colore="bianco">
-          <img src="Alfiere-Bianco.png" alt="Alfiere Bianco" />
-        </div>
-      </div>
-      <div id="g1" class="casella nera">
-        <div class="coordinate colonna testoBianco">g</div>
-        <div class="pezzo cavallo" colore="bianco">
-          <img src="Cavallo-Bianco.png" alt="Cavallo Bianco" />
-        </div>
-      </div>
-      <div id="h1" class="casella bianca">
-        <div class="coordinate riga testoNero">1</div>
-        <div class="coordinate colonna testoNero">h</div>
-        <div class="pezzo torre" colore="bianco">
-          <img src="Torre-Bianco.png" alt="Torre Bianca" />
-        </div>
-      </div>
-    </div>
   </body>
 </html>
